@@ -586,6 +586,8 @@ if "schema" in st.session_state and "selected_table" in st.session_state:
             f"IMPORTANT: Use square brackets [] for identifiers, NOT backticks. For example: [ColumnName] not `ColumnName`."
             f"CRITICAL: Do NOT wrap the entire query in backticks or square brackets. Return ONLY the SQL code."
             f"Do not use any comment or other symbols in the query, just return the SQL code."
+            f" If you use any aggregate functions (e.g., AVG, SUM, COUNT, MIN, MAX), every non-aggregated column appearing in the SELECT list MUST also appear in a GROUP BY clause." 
+            f"Ensure the query compiles without SQL Server errors"
         )
 
         # Create progress indicators
