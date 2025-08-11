@@ -577,17 +577,12 @@ if "schema" in st.session_state and "selected_table" in st.session_state:
         ]
         schema_str = "\n".join(schema_lines)
         prompt = (
-            f"You are a SQL Server expert. Here is the schema for table '{table_name}' in database '{database_name}' with schema '{schema_name}':\n"
-            f"{schema_str}\n"
-            f"Write a SQL Server query for this request: {user_question}\n"
-            f"Only use columns from the schema above and only reference the table '{database_name}.{schema_name}.{table_name}'."
-            f"Only return the SQL query, do not include any explanation."
-            f"Make sure to use the correct SQL syntax for SQL Server."
-            f"IMPORTANT: Use square brackets [] for identifiers, NOT backticks. For example: [ColumnName] not `ColumnName`."
-            f"CRITICAL: Do NOT wrap the entire query in backticks or square brackets. Return ONLY the SQL code."
-            f"Do not use any comment or other symbols in the query, just return the SQL code."
-            f" If you use any aggregate functions (e.g., AVG, SUM, COUNT, MIN, MAX), every non-aggregated column appearing in the SELECT list MUST also appear in a GROUP BY clause." 
-            f"Ensure the query compiles without SQL Server errors"
+            f"Table: [{schema_name}].[{table_name}]\n"
+            f"Columns: {schema_str}\n"
+            f"Task: {user_question}\n\n"
+            f"IMPORTANT: Return ONLY the SQL query. No explanations, no comments, no text before or after.\n"
+            f"Rules: Use aggregates when possible, TOP N for limits, WHERE for filters, GROUP BY with aggregates.\n\n"
+            f"SQL:"
         )
 
         # Create progress indicators
@@ -620,8 +615,18 @@ if "schema" in st.session_state and "selected_table" in st.session_state:
             # Clean up SQL Server syntax - remove backticks and fix common issues
             import re
             
-            # Remove backticks around the entire query
+            # Remove any explanatory text before/after SQL
             sql_query = sql_query.strip()
+            
+            # Remove common explanatory prefixes
+            sql_query = re.sub(r'^(Here\'s|Here is|This|The SQL query is|SQL query:|Query:)\s*', '', sql_query, flags=re.IGNORECASE)
+            
+            # Remove markdown code blocks
+            sql_query = re.sub(r'^```sql\s*', '', sql_query, flags=re.IGNORECASE)
+            sql_query = re.sub(r'^```\s*', '', sql_query)
+            sql_query = re.sub(r'\s*```$', '', sql_query)
+            
+            # Remove backticks around the entire query
             if sql_query.startswith('`') and sql_query.endswith('`'):
                 sql_query = sql_query[1:-1]
             
@@ -632,8 +637,21 @@ if "schema" in st.session_state and "selected_table" in st.session_state:
             # Replace backticks around identifiers with square brackets
             sql_query = re.sub(r'`([^`]+)`', r'[\1]', sql_query)
             
-            # Remove any extra whitespace
-            sql_query = sql_query.strip()
+            # Extract only the first SQL statement if multiple lines
+            lines = sql_query.split('\n')
+            sql_lines = []
+            for line in lines:
+                line = line.strip()
+                if line and not line.startswith('--') and not line.lower().startswith('note:') and not line.lower().startswith('explanation:'):
+                    sql_lines.append(line)
+                elif sql_lines:  # Stop at first explanatory text after SQL started
+                    break
+            
+            sql_query = ' '.join(sql_lines).strip()
+            
+            # Debug: Show generated SQL
+            st.subheader("🔍 Generated SQL (Debug)")
+            st.code(sql_query, language="sql")
             
             progress_bar.progress(50)
             status_text.text("🔍 Executing SQL query...")
